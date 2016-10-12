@@ -1,15 +1,15 @@
-﻿using System.Data.Entity.Infrastructure;
+﻿using System;
+using System.Data.Entity.Infrastructure;
 using System.Data.Entity.Infrastructure.Interception;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using EfIssueSimulator;
+using Xunit;
 
-namespace EfIssueSimulator.Tests
+namespace EfIssueSimulatorTests
 {
-    [TestClass]
-    public class IssueContextTest
+    public class IssueContextTest : TestClassBase, IDisposable
     {
-        [TestCleanup]
-        public void TearDown()
+        public void Dispose()
         {
             using (var context = new IssueContext())
             {
@@ -18,7 +18,7 @@ namespace EfIssueSimulator.Tests
             }
         }
 
-        [TestMethod]
+        [Fact, Order(1)]
         public void ThereIsNoIssueWhenInsertARecordWithoutIDbCommandTreeInterceptor()
         {
             var tenant = new Tenant { Name = "First Tenant" };
@@ -35,17 +35,18 @@ namespace EfIssueSimulator.Tests
             }
             //Assert 
             using (var context = new IssueContext())
-                Assert.IsTrue(context.Blogs.Any(b => b.Name == "Some blog about C#" && b.TenantId == tenant.Id));
+                Assert.True(context.Blogs.Any(b => b.Name == "Some blog about C#" && b.TenantId == tenant.Id));
         }
 
-        [TestMethod]
+        [Fact, Order(2)]
         public void ThereIsIssueWhenInsertARecordWithIDbCommandTreeInterceptor()
         {
             var tenant = new Tenant { Name = "First Tenant" };
+            DbInterception.Add(new MultiTenantTreeInterceptor());
+            DbInterception.Add(new MultiTenantInterceptor());
+
             using (var context = new IssueContext())
             {
-                DbInterception.Add(new MultiTenantTreeInterceptor());
-                DbInterception.Add(new MultiTenantInterceptor());
                 //Arrange
                 context.Database.CreateIfNotExists();
                 context.Tenants.Add(tenant);
@@ -54,15 +55,16 @@ namespace EfIssueSimulator.Tests
                 MultiTenantInterceptor.TentantId = tenant.Id;
 
                 //Act
-                context.Blogs.Add(new Blog { Name = "Some blog about C#" });
+                context.Blogs.Add(new Blog { Name = "Some blog about C#", Tenant = tenant, TenantId = tenant.Id });
                 try
                 {
                     context.SaveChanges();
+                    Assert.True(false, "it should fail");
                 }
                 catch (DbUpdateException ex)
                 {
                     const string expected = "The variable name '@tenantId' has already been declared. Variable names must be unique within a query batch or stored procedure.";
-                    Assert.AreEqual(expected, ex.InnerException.InnerException.Message);
+                    Assert.Equal(expected, ex.InnerException.InnerException.Message);
                 }
             }
         }

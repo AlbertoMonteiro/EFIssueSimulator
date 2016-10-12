@@ -42,7 +42,7 @@ namespace EfIssueSimulator
                     dbSetClauses.Cast<DbModificationClause>().ToList().AsReadOnly(),
                     insertCommandTree.Returning);
             }
-            return insertCommandTree;
+            return null;
         }
 
         private static DbSetClause CreateSetClause(DbPropertyExpression propertyExpression)
